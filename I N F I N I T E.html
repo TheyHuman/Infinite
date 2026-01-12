@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>I N  F I N I T E</title>
+<style>
+body, html {margin:0;padding:0;overflow:hidden;background:#000;font-family:monospace;user-select:none;touch-action:manipulation;}
+canvas {display:block;image-rendering:pixelated;}
+#ui {position:absolute;top:10px;left:10px;color:#0ff;font-size:20px;z-index:10;text-shadow:0 0 8px #0ff,0 0 16px #0ff;}
+#startScreen,#gameOverScreen {position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);display:flex;justify-content:center;align-items:center;flex-direction:column;color:#0ff;font-size:28px;z-index:20;text-align:center;text-shadow:0 0 6px #0ff;}
+button {margin-top:20px;padding:10px 20px;font-size:18px;color:#0ff;background:transparent;border:2px solid #0ff;border-radius:4px;cursor:pointer;text-shadow:0 0 4px #0ff;}
+button:hover {background:#0ff1;}
+</style>
+</head>
+<body>
+<div id="ui">Score: 0 | High Score: 0</div>
+<div id="startScreen">
+  <div style="font-size:48px;letter-spacing:8px;">I N  F I N I T E</div>
+  <button id="startBtn">Start Game</button>
+</div>
+<div id="gameOverScreen" style="display:none;">
+  <div style="font-size:48px;letter-spacing:6px;">Game Over</div>
+  <div id="finalScore" style="margin-top:20px;"></div>
+  <button id="restartBtn">Restart</button>
+</div>
+<canvas id="gameCanvas"></canvas>
+<script>
+const canvas=document.getElementById('gameCanvas');
+const ctx=canvas.getContext('2d');
+let width=canvas.width=window.innerWidth;
+let height=canvas.height=window.innerHeight;
+
+// --- Constants ---
+const gravity=0.7;
+const jumpForce=15;
+const playerSize=24;
+const obstacleMinWidth=20;
+const obstacleMaxWidth=35;
+
+// --- Utilities ---
+function randomRange(min,max){return Math.random()*(max-min)+min;}
+function spawnParticles(x,y,color,count=10){for(let i=0;i<count;i++)particles.push(new Particle(x,y,color));}
+function spawnDeathExplosion(x,y){for(let i=0;i<50;i++){deathParticles.push({x:x,y:y,dx:(Math.random()-0.5)*8,dy:(Math.random()-0.5)*8,size:2,alpha:1});}}
+function checkCollision(player,obj){const b=obj.getBounds();return player.x< b.x+b.width && player.x+player.width> b.x && player.y< b.y+b.height && player.y+player.height> b.y;}
+
+// --- Classes ---
+class Player{
+  constructor(){
+    this.x=100;this.y=height-playerSize;this.width=playerSize;this.height=playerSize;
+    this.dy=0;this.jumps=0;this.maxJumps=2;this.color='#0ff';this.trail=[];this.angle=0;this.speedBoost=0;
+  }
+  update(){
+    this.dy+=gravity; this.y+=this.dy; this.x+=this.speedBoost; this.speedBoost*=0.95;
+
+    // Land on Neon Blocks
+    neonBlocks.forEach(b=>{
+      const px=this.x, py=this.y, pw=this.width, ph=this.height;
+      const bx=b.x, by=b.y, bw=b.width, bh=b.height;
+      if(px+pw>bx && px<bx+bw &&
+         py+ph<=by+this.dy && py+ph+this.dy>=by && this.dy>=0){
+        this.y=by-ph; this.dy=0; this.jumps=0;
+      }
+    });
+
+    if(this.y+this.height>height){this.y=height-this.height; this.dy=0; this.jumps=0; this.angle=0;} 
+    else this.angle+=0.25;
+
+    this.trail.push({x:this.x,y:this.y}); if(this.trail.length>10)this.trail.shift();
+  }
+  jump(force=jumpForce){if(this.jumps<this.maxJumps){this.dy=-force;this.jumps++;spawnParticles(this.x+this.width/2,this.y+this.height,'#0ff',15);}}
+  forwardBoost(amount){this.speedBoost=amount;spawnParticles(this.x+this.width/2,this.y+this.height/2,'#f00',12);}
+  draw(){
+    this.trail.forEach((t,i)=>{ctx.fillStyle=`rgba(0,255,255,${i/this.trail.length/2})`;ctx.fillRect(Math.floor(t.x),Math.floor(t.y),this.width,this.height);});
+    ctx.save();ctx.translate(this.x+this.width/2,this.y+this.height/2);ctx.rotate(this.angle);
+    ctx.fillStyle=this.color;ctx.shadowColor='#0ff';ctx.shadowBlur=16;ctx.fillRect(-this.width/2,-this.height/2,this.width,this.height);ctx.shadowBlur=0;
+    ctx.restore();
+  }
+}
+
+class Spike{
+  constructor(x,width,height,y=null){this.x=x;this.width=width;this.height=height;this.y=y===null?canvas.height-height:y;this.color='#f0f';}
+  update(speed){this.x-=speed;}
+  draw(){ctx.fillStyle=this.color;ctx.shadowColor=this.color;ctx.shadowBlur=20;ctx.beginPath();ctx.moveTo(Math.floor(this.x),this.y+this.height);ctx.lineTo(Math.floor(this.x+this.width/2),this.y);ctx.lineTo(Math.floor(this.x+this.width),this.y+this.height);ctx.closePath();ctx.fill();ctx.shadowBlur=0;}
+  getBounds(){return {x:this.x,y:this.y,width:this.width,height:this.height};}
+}
+
+class SpikeCluster{constructor(x){this.spikes=[];const type=Math.random();const count=type<0.5?1:type<0.8?2:3;let spikeX=x;for(let i=0;i<count;i++){const width=randomRange(obstacleMinWidth,obstacleMaxWidth);const height=randomRange(30,80);this.spikes.push(new Spike(spikeX,width,height));spikeX+=width+5;}}
+  update(speed){this.spikes.forEach(s=>s.update(speed));}
+  draw(){this.spikes.forEach(s=>s.draw());}
+}
+
+class VerticalWall{
+  constructor(x,width,height){this.x=x;this.width=width;this.height=height;this.baseY=randomRange(height/2,canvas.height-height/2);this.y=this.baseY;this.dir=1;this.speed=1;this.color='#ff0';}
+  update(speed){this.x-=speed;this.y+=this.dir*this.speed;if(this.y<50||this.y+this.height>canvas.height-50)this.dir*=-1;}
+  draw(){ctx.fillStyle=this.color;ctx.shadowColor=this.color;ctx.shadowBlur=15;ctx.fillRect(this.x,this.y,this.width,this.height);ctx.shadowBlur=0;}
+  getBounds(){return {x:this.x,y:this.y,width:this.width,height:this.height};}
+}
+
+class FallingSpike{
+  constructor(x,width,height){this.x=x;this.width=width;this.height=height;this.y=-height;this.fallSpeed=randomRange(2,5);this.color='#f0f';}
+  update(speed){this.x-=speed;this.y+=this.fallSpeed;if(this.y>canvas.height)this.y=-this.height;}
+  draw(){ctx.fillStyle=this.color;ctx.shadowColor=this.color;ctx.shadowBlur=20;ctx.beginPath();ctx.moveTo(Math.floor(this.x),this.y+this.height);ctx.lineTo(Math.floor(this.x+this.width/2),this.y);ctx.lineTo(Math.floor(this.x+this.width),this.y+this.height);ctx.closePath();ctx.fill();ctx.shadowBlur=0;}
+  getBounds(){return {x:this.x,y:this.y,width:this.width,height:this.height};}
+}
+
+// --- JumpPad Class (global scope) ---
+class JumpPad {
+  constructor(x,width,type='green'){
+    this.x = x;
+    this.width = width;
+    this.height = 10;
+    this.y = height - this.height;
+    this.type = type;
+    // Added purple pad color
+    this.color = type==='green'?'#0f0':
+                 type==='red'?'#f00':
+                 type==='blue'?'#08f':
+                 type==='purple'?'#a0f':'#0ff';
+    this.cooldown = 0; // cooldown property
+  }
+
+  update(speed){
+    this.x -= speed;
+    if(this.cooldown > 0) this.cooldown--; // decrement cooldown
+  }
+
+  draw(){
+    ctx.fillStyle = this.color;
+    ctx.shadowColor = this.color;
+    ctx.shadowBlur = 15;
+    ctx.fillRect(this.x,this.y,this.width,this.height);
+    ctx.shadowBlur = 0;
+  }
+
+  getBounds(){
+    return {x:this.x, y:this.y, width:this.width, height:this.height};
+  }
+}
+
+// --- UPDATE FUNCTION (runs every frame) ---
+function update() {
+  player.update();
+
+  // Update obstacles, spikes, walls, neon blocks
+  obstacles.forEach(c => c.update(speed));
+  walls.forEach(w => w.update(speed));
+  fallingSpikes.forEach(f => f.update(speed));
+  neonBlocks.forEach(b => b.update(speed));
+  jumpPads.forEach(p => p.update(speed)); // update position + cooldown
+
+ // --- PATCH: Purple Pads Spawn More Frequently + Collisions ---
+function spawnPad() {
+  let r = Math.random();
+  let type = 'green'; // default pad
+
+  // Increased purple pad chance
+  if (r < 0.08) type = 'blue';       // 8% chance
+  else if (r < 0.18) type = 'red';   // 10% chance
+  else if (r < 0.40) type = 'purple';// 22% chance — now more common
+
+  // Spawn the pad
+  jumpPads.push(new JumpPad(width + randomRange(50,100), randomRange(40,80), type));
+}
+
+// --- PAD COLLISIONS (inside update() function) ---
+jumpPads.forEach(p => {
+  if(p.cooldown === 0 && checkCollision(player, p)) {
+    if(p.type === 'green') player.jump(25);         // normal jump
+    else if(p.type === 'red') player.forwardBoost(12); // boost forward
+    else if(p.type === 'blue') player.jump(42);    // super jump
+    else if(p.type === 'purple') {
+      speed *= -1; // reverse all horizontal movement temporarily
+    }
+    p.cooldown = 25; // ensures the pad triggers only once per contact
+  }
+});
+
+  // Update particles
+  particles.forEach(p => p.update());
+  deathParticles.forEach(p => p.update());
+
+  // Score and speed
+  score += 0.25;
+  speed += 0.0035;
+  document.getElementById('ui').innerText = `Score: ${Math.floor(score)} | High Score: ${highScore}`;
+}
+
+class NeonBlock{
+  constructor(x,width,height,y){this.x=x;this.width=width;this.height=height;this.y=y;this.color='#f90';}
+  update(speed){this.x-=speed;}
+  draw(){ctx.fillStyle=this.color;ctx.shadowColor=this.color;ctx.shadowBlur=15;ctx.fillRect(this.x,this.y,this.width,this.height);ctx.shadowBlur=0;}
+  getBounds(){return {x:this.x,y:this.y,width:this.width,height:this.height};}
+}
+
+class Particle{constructor(x,y,color){this.x=x;this.y=y;this.color=color;this.dx=randomRange(-4,4);this.dy=randomRange(-4,-1);this.alpha=1;}update(){this.x+=this.dx;this.y+=this.dy;this.alpha-=0.03;}draw(){ctx.globalAlpha=this.alpha;ctx.fillStyle=this.color;ctx.fillRect(Math.floor(this.x),Math.floor(this.y),2,2);ctx.globalAlpha=1;}}
+
+// --- Background Circles ---
+class CircleBG{constructor(){this.x=randomRange(0,width);this.y=randomRange(0,height);this.radius=randomRange(2,8);this.speed=randomRange(0.1,0.8);this.color=`rgba(${Math.floor(randomRange(0,255))},${Math.floor(randomRange(0,255))},${Math.floor(randomRange(0,255))},0.3)`;}update(){this.x-=this.speed;if(this.x<-this.radius)this.x=width+this.radius;}draw(){ctx.fillStyle=this.color;ctx.fillRect(Math.floor(this.x),Math.floor(this.y),this.radius,this.radius);}}
+
+// --- Game Variables ---
+let player = new Player();
+let obstacles=[], jumpPads=[], neonBlocks=[], fallingSpikes=[], walls=[], bgCircles=Array.from({length:120},()=>new CircleBG()), particles=[], deathParticles=[];
+let speed=13, score=0, highScore=localStorage.getItem('INFINITE_HIGH')||0, gameOver=false;
+let obstacleTimer=0, padTimer=0, wallTimer=0, fallTimer=0, blockTimer=0;
+let obstacleInterval=60, padInterval=250, wallInterval=400, fallInterval=300, blockInterval=300;
+
+// --- Spawn Functions ---
+function spawnObstacle(){obstacles.push(new SpikeCluster(width+randomRange(50,100)));}
+function spawnPad(){
+  let r=Math.random(), type='green';
+  if(r<0.1)type='blue'; else if(r<0.3)type='red';
+  jumpPads.push(new JumpPad(width+randomRange(50,100),randomRange(40,80),type));
+}
+function spawnWall(){walls.push(new VerticalWall(width+randomRange(50,100),randomRange(20,50),randomRange(80,150)));}
+function spawnFallingSpike(){fallingSpikes.push(new FallingSpike(width+randomRange(50,100),randomRange(20,30),randomRange(30,50)));}
+function spawnNeonBlock(){let w=randomRange(60,120), h=20; let y=(Math.random()<0.6)?randomRange(height-200,height-60):randomRange(height-350,height-250); neonBlocks.push(new NeonBlock(width,w,h,y));}
+
+// --- Update ---
+function update(){
+  player.update();
+  obstacles.forEach(c=>c.update(speed)); obstacles=obstacles.filter(c=>c.spikes.some(s=>s.x+s.width>0));
+  walls.forEach(w=>w.update(speed)); walls=walls.filter(w=>w.x+w.width>0);
+  fallingSpikes.forEach(f=>f.update(speed)); fallingSpikes=fallingSpikes.filter(f=>f.x+f.width>0);
+  neonBlocks.forEach(b=>b.update(speed)); neonBlocks=neonBlocks.filter(b=>b.x+b.width>0);
+  jumpPads.forEach(p=>p.update(speed)); jumpPads=jumpPads.filter(p=>p.x+p.width>0);
+  particles.forEach(p=>p.update()); particles=particles.filter(p=>p.alpha>0);
+  deathParticles.forEach(p=>{p.x+=p.dx;p.y+=p.dy;p.alpha-=0.05;}); deathParticles=deathParticles.filter(p=>p.alpha>0);
+  bgCircles.forEach(c=>c.update());
+
+  obstacleTimer++; padTimer++; wallTimer++; fallTimer++; blockTimer++;
+  if(obstacleTimer>obstacleInterval){spawnObstacle(); obstacleTimer=0;}
+  if(padTimer>padInterval){spawnPad(); padTimer=0;}
+  if(wallTimer>wallInterval){spawnWall(); wallTimer=0;}
+  if(fallTimer>fallInterval){spawnFallingSpike(); fallTimer=0;}
+  if(blockTimer>blockInterval){spawnNeonBlock(); blockTimer=0;}
+
+  // Collisions
+  obstacles.forEach(c=>c.spikes.forEach(s=>{if(checkCollision(player,s)) triggerGameOver();}));
+  walls.forEach(w=>{if(checkCollision(player,w)) triggerGameOver();});
+  fallingSpikes.forEach(f=>{if(checkCollision(player,f)) triggerGameOver();});
+  jumpPads.forEach(p=>{if(checkCollision(player,p)){if(p.type==='green')player.jump(25); else if(p.type==='red')player.forwardBoost(8); else if(p.type==='blue')player.jump(40);}});
+  
+  score+=0.25; speed+=0.0035;
+  document.getElementById('ui').innerText=`Score: ${Math.floor(score)} | High Score: ${highScore}`;
+}
+
+// --- Game Over ---
+function triggerGameOver(){
+  gameOver=true; spawnDeathExplosion(player.x+player.width/2,player.y+player.height/2);
+  document.getElementById('finalScore').innerText=`Score: ${Math.floor(score)}`;
+  if(score>highScore){highScore=Math.floor(score); localStorage.setItem('INFINITE_HIGH',highScore);}
+  document.getElementById('gameOverScreen').style.display='flex';
+}
+
+// --- Draw ---
+function draw(){
+  ctx.fillStyle='#000';ctx.fillRect(0,0,width,height);
+  bgCircles.forEach(c=>c.draw());
+  obstacles.forEach(c=>c.draw());
+  walls.forEach(w=>w.draw());
+  fallingSpikes.forEach(f=>f.draw());
+  neonBlocks.forEach(b=>b.draw());
+  jumpPads.forEach(p=>p.draw());
+
+  // Holographic floor
+  const floorHeight=100;
+  const floorGradient=ctx.createLinearGradient(0,height-floorHeight,width,height);
+  floorGradient.addColorStop(0,'rgba(0,255,255,0.15)'); floorGradient.addColorStop(0.5,'rgba(0,255,255,0.08)'); floorGradient.addColorStop(1,'rgba(0,255,255,0)');
+  ctx.fillStyle=floorGradient;ctx.fillRect(0,height-floorHeight,width,floorHeight);
+
+  player.draw();
+  particles.forEach(p=>p.draw());
+  deathParticles.forEach(p=>{ctx.fillStyle=`rgba(0,150,255,${p.alpha})`;ctx.fillRect(p.x,p.y,p.size,p.size);});
+
+  // Side fade
+  const g1=ctx.createLinearGradient(0,0,150,0); g1.addColorStop(0,'#000'); g1.addColorStop(1,'rgba(0,0,0,0)'); ctx.fillStyle=g1; ctx.fillRect(0,0,150,height);
+  const g2=ctx.createLinearGradient(width-150,0,width,0); g2.addColorStop(0,'rgba(0,0,0,0)'); g2.addColorStop(1,'#000'); ctx.fillStyle=g2; ctx.fillRect(width-150,0,150,height);
+}
+
+// --- Loop ---
+function gameLoop(){if(!gameOver){update();draw();requestAnimationFrame(gameLoop);}}
+
+// --- Input ---
+document.addEventListener('keydown',e=>{if(e.code==='Space')player.jump();});
+canvas.addEventListener('click',()=>player.jump());
+canvas.addEventListener('touchstart',e=>{player.jump();e.preventDefault();});
+
+// --- Start/Restart ---
+document.getElementById('startBtn').addEventListener('click',()=>{document.getElementById('startScreen').style.display='none';resetGame();gameLoop();});
+document.getElementById('restartBtn').addEventListener('click',()=>{document.getElementById('gameOverScreen').style.display='none';resetGame();gameLoop();});
+
+function resetGame(){
+  player=new Player();
+  obstacles=[]; walls=[]; fallingSpikes=[]; neonBlocks=[]; jumpPads=[]; particles=[]; deathParticles=[];
+  obstacleTimer=0; padTimer=0; wallTimer=0; fallTimer=0; blockTimer=0;
+  score=0; speed=9; gameOver=false;
+
+  // Spawn initial obstacles so player can jump immediately
+  spawnNeonBlock();
+  spawnPad();
+  spawnObstacle();
+}
+
+window.addEventListener('resize',()=>{width=canvas.width=window.innerWidth;height=canvas.height=window.innerHeight;});
+</script>
+</body>
+</html>
