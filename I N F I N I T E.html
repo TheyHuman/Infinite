@@ -85,7 +85,8 @@ class Spike{
   getBounds(){return {x:this.x,y:this.y,width:this.width,height:this.height};}
 }
 
-class SpikeCluster{constructor(x){this.spikes=[];const type=Math.random();const count=type<0.5?1:type<0.8?2:3;let spikeX=x;for(let i=0;i<count;i++){const width=randomRange(obstacleMinWidth,obstacleMaxWidth);const height=randomRange(30,80);this.spikes.push(new Spike(spikeX,width,height));spikeX+=width+5;}}
+class SpikeCluster{
+  constructor(x){this.spikes=[];const type=Math.random();const count=type<0.5?1:type<0.8?2:3;let spikeX=x;for(let i=0;i<count;i++){const w=randomRange(obstacleMinWidth,obstacleMaxWidth);const h=randomRange(30,80);this.spikes.push(new Spike(spikeX,w,h));spikeX+=w+5;}}
   update(speed){this.spikes.forEach(s=>s.update(speed));}
   draw(){this.spikes.forEach(s=>s.draw());}
 }
@@ -104,117 +105,35 @@ class FallingSpike{
   getBounds(){return {x:this.x,y:this.y,width:this.width,height:this.height};}
 }
 
-// --- JumpPad Class (global scope) ---
 class JumpPad {
   constructor(x,width,type='green'){
-    this.x = x;
-    this.width = width;
-    this.height = 10;
-    this.y = height - this.height;
-    this.type = type;
-    // Added purple pad color
-    this.color = type==='green'?'#0f0':
-                 type==='red'?'#f00':
-                 type==='blue'?'#08f':
-                 type==='purple'?'#a0f':'#0ff';
-    this.cooldown = 0; // cooldown property
+    this.x=x; this.width=width; this.height=10; this.y=height-this.height; this.type=type; this.cooldown=0;
+    this.color= type==='green'?'#0f0':type==='red'?'#f00':type==='blue'?'#08f':type==='purple'?'#a0f':type==='slow'?'#0055ff':'#0ff';
   }
-
-  update(speed){
-    this.x -= speed;
-    if(this.cooldown > 0) this.cooldown--; // decrement cooldown
-  }
-
-  draw(){
-    ctx.fillStyle = this.color;
-    ctx.shadowColor = this.color;
-    ctx.shadowBlur = 15;
-    ctx.fillRect(this.x,this.y,this.width,this.height);
-    ctx.shadowBlur = 0;
-  }
-
-  getBounds(){
-    return {x:this.x, y:this.y, width:this.width, height:this.height};
-  }
-}
-
-// --- UPDATE FUNCTION (runs every frame) ---
-function update() {
-  player.update();
-
-  // Update obstacles, spikes, walls, neon blocks
-  obstacles.forEach(c => c.update(speed));
-  walls.forEach(w => w.update(speed));
-  fallingSpikes.forEach(f => f.update(speed));
-  neonBlocks.forEach(b => b.update(speed));
-  jumpPads.forEach(p => p.update(speed)); // update position + cooldown
-
- // --- PATCH: Purple Pads Spawn More Frequently + Collisions ---
-function spawnPad() {
-  let r = Math.random();
-  let type = 'green'; // default pad
-
-  // Increased purple pad chance
-  if (r < 0.08) type = 'blue';       // 8% chance
-  else if (r < 0.18) type = 'red';   // 10% chance
-  else if (r < 0.40) type = 'purple';// 22% chance — now more common
-
-  // Spawn the pad
-  jumpPads.push(new JumpPad(width + randomRange(50,100), randomRange(40,80), type));
-}
-
-// --- PAD COLLISIONS (inside update() function) ---
-jumpPads.forEach(p => {
-  if(p.cooldown === 0 && checkCollision(player, p)) {
-    if(p.type === 'green') player.jump(25);         // normal jump
-    else if(p.type === 'red') player.forwardBoost(12); // boost forward
-    else if(p.type === 'blue') player.jump(42);    // super jump
-    else if(p.type === 'purple') {
-      speed *= -1; // reverse all horizontal movement temporarily
-    }
-    p.cooldown = 25; // ensures the pad triggers only once per contact
-  }
-});
-
-  // Update particles
-  particles.forEach(p => p.update());
-  deathParticles.forEach(p => p.update());
-
-  // Score and speed
-  score += 0.25;
-  speed += 0.0035;
-  document.getElementById('ui').innerText = `Score: ${Math.floor(score)} | High Score: ${highScore}`;
-}
-
-class NeonBlock{
-  constructor(x,width,height,y){this.x=x;this.width=width;this.height=height;this.y=y;this.color='#f90';}
-  update(speed){this.x-=speed;}
-  draw(){ctx.fillStyle=this.color;ctx.shadowColor=this.color;ctx.shadowBlur=15;ctx.fillRect(this.x,this.y,this.width,this.height);ctx.shadowBlur=0;}
+  update(speed){this.x-=speed;if(this.cooldown>0)this.cooldown--;}
+  draw(){ctx.fillStyle=this.color; ctx.shadowColor=this.color; ctx.shadowBlur=15; ctx.fillRect(this.x,this.y,this.width,this.height); ctx.shadowBlur=0;}
   getBounds(){return {x:this.x,y:this.y,width:this.width,height:this.height};}
 }
 
+class NeonBlock{constructor(x,width,height,y){this.x=x;this.width=width;this.height=height;this.y=y;this.color='#f90';}update(speed){this.x-=speed;}draw(){ctx.fillStyle=this.color;ctx.shadowColor=this.color;ctx.shadowBlur=15;ctx.fillRect(this.x,this.y,this.width,this.height);ctx.shadowBlur=0;}getBounds(){return {x:this.x,y:this.y,width:this.width,height:this.height};}}
 class Particle{constructor(x,y,color){this.x=x;this.y=y;this.color=color;this.dx=randomRange(-4,4);this.dy=randomRange(-4,-1);this.alpha=1;}update(){this.x+=this.dx;this.y+=this.dy;this.alpha-=0.03;}draw(){ctx.globalAlpha=this.alpha;ctx.fillStyle=this.color;ctx.fillRect(Math.floor(this.x),Math.floor(this.y),2,2);ctx.globalAlpha=1;}}
-
-// --- Background Circles ---
 class CircleBG{constructor(){this.x=randomRange(0,width);this.y=randomRange(0,height);this.radius=randomRange(2,8);this.speed=randomRange(0.1,0.8);this.color=`rgba(${Math.floor(randomRange(0,255))},${Math.floor(randomRange(0,255))},${Math.floor(randomRange(0,255))},0.3)`;}update(){this.x-=this.speed;if(this.x<-this.radius)this.x=width+this.radius;}draw(){ctx.fillStyle=this.color;ctx.fillRect(Math.floor(this.x),Math.floor(this.y),this.radius,this.radius);}}
 
-// --- Game Variables ---
-let player = new Player();
-let obstacles=[], jumpPads=[], neonBlocks=[], fallingSpikes=[], walls=[], bgCircles=Array.from({length:120},()=>new CircleBG()), particles=[], deathParticles=[];
+let player=new Player(), obstacles=[], jumpPads=[], neonBlocks=[], fallingSpikes=[], walls=[], bgCircles=Array.from({length:120},()=>new CircleBG()), particles=[], deathParticles=[];
 let speed=13, score=0, highScore=localStorage.getItem('INFINITE_HIGH')||0, gameOver=false;
 let obstacleTimer=0, padTimer=0, wallTimer=0, fallTimer=0, blockTimer=0;
 let obstacleInterval=60, padInterval=250, wallInterval=400, fallInterval=300, blockInterval=300;
+let slowTimer=0, slowActive=false, normalSpeed=speed;
 
 // --- Spawn Functions ---
 function spawnObstacle(){obstacles.push(new SpikeCluster(width+randomRange(50,100)));}
-function spawnPad(){
-  let r=Math.random(), type='green';
-  if(r<0.1)type='blue'; else if(r<0.3)type='red';
-  jumpPads.push(new JumpPad(width+randomRange(50,100),randomRange(40,80),type));
-}
+function spawnPad(){let r=Math.random(), type='green'; if(r<0.08)type='blue'; else if(r<0.18)type='red'; else if(r<0.3)type='purple'; else if(r<0.4)type='slow'; jumpPads.push(new JumpPad(width+randomRange(80,140),randomRange(40,80),type));}
 function spawnWall(){walls.push(new VerticalWall(width+randomRange(50,100),randomRange(20,50),randomRange(80,150)));}
 function spawnFallingSpike(){fallingSpikes.push(new FallingSpike(width+randomRange(50,100),randomRange(20,30),randomRange(30,50)));}
-function spawnNeonBlock(){let w=randomRange(60,120), h=20; let y=(Math.random()<0.6)?randomRange(height-200,height-60):randomRange(height-350,height-250); neonBlocks.push(new NeonBlock(width,w,h,y));}
+function spawnNeonBlock(){let w=randomRange(60,120),h=20,y=(Math.random()<0.6)?randomRange(height-200,height-60):randomRange(height-350,height-250); neonBlocks.push(new NeonBlock(width,w,h,y));}
+
+// --- Game Over ---
+function triggerGameOver(){gameOver=true; spawnDeathExplosion(player.x+player.width/2,player.y+player.height/2); document.getElementById('finalScore').innerText=`Score: ${Math.floor(score)}`; if(score>highScore){highScore=Math.floor(score); localStorage.setItem('INFINITE_HIGH',highScore);} document.getElementById('gameOverScreen').style.display='flex';}
 
 // --- Update ---
 function update(){
@@ -235,22 +154,28 @@ function update(){
   if(fallTimer>fallInterval){spawnFallingSpike(); fallTimer=0;}
   if(blockTimer>blockInterval){spawnNeonBlock(); blockTimer=0;}
 
-  // Collisions
+  // --- Slow pad ---
+  if(slowActive){slowTimer--; if(slowTimer<=0){speed=normalSpeed; slowActive=false;}}
+
+  // --- Jump Pad Collisions ---
+  jumpPads.forEach(p=>{
+    if(p.cooldown===0 && checkCollision(player,p)){
+      if(p.type==='green') player.jump(25);
+      else if(p.type==='red') player.forwardBoost(12);
+      else if(p.type==='blue') player.jump(42);
+      else if(p.type==='purple'){speed*=-1; setTimeout(()=>speed*=-1,800);}
+      else if(p.type==='slow' && !slowActive){normalSpeed=speed; speed*=0.5; slowTimer=90; slowActive=true;}
+      p.cooldown=25;
+    }
+  });
+
+  // --- Check collisions for Game Over ---
   obstacles.forEach(c=>c.spikes.forEach(s=>{if(checkCollision(player,s)) triggerGameOver();}));
   walls.forEach(w=>{if(checkCollision(player,w)) triggerGameOver();});
   fallingSpikes.forEach(f=>{if(checkCollision(player,f)) triggerGameOver();});
-  jumpPads.forEach(p=>{if(checkCollision(player,p)){if(p.type==='green')player.jump(25); else if(p.type==='red')player.forwardBoost(8); else if(p.type==='blue')player.jump(40);}});
-  
-  score+=0.25; speed+=0.0035;
-  document.getElementById('ui').innerText=`Score: ${Math.floor(score)} | High Score: ${highScore}`;
-}
 
-// --- Game Over ---
-function triggerGameOver(){
-  gameOver=true; spawnDeathExplosion(player.x+player.width/2,player.y+player.height/2);
-  document.getElementById('finalScore').innerText=`Score: ${Math.floor(score)}`;
-  if(score>highScore){highScore=Math.floor(score); localStorage.setItem('INFINITE_HIGH',highScore);}
-  document.getElementById('gameOverScreen').style.display='flex';
+  // --- Update score ---
+  if(!gameOver){score+=0.25; speed+=0.0035; document.getElementById('ui').innerText=`Score: ${Math.floor(score)} | High Score: ${highScore}`;}
 }
 
 // --- Draw ---
@@ -262,18 +187,15 @@ function draw(){
   fallingSpikes.forEach(f=>f.draw());
   neonBlocks.forEach(b=>b.draw());
   jumpPads.forEach(p=>p.draw());
-
-  // Holographic floor
   const floorHeight=100;
   const floorGradient=ctx.createLinearGradient(0,height-floorHeight,width,height);
-  floorGradient.addColorStop(0,'rgba(0,255,255,0.15)'); floorGradient.addColorStop(0.5,'rgba(0,255,255,0.08)'); floorGradient.addColorStop(1,'rgba(0,255,255,0)');
-  ctx.fillStyle=floorGradient;ctx.fillRect(0,height-floorHeight,width,floorHeight);
-
+  floorGradient.addColorStop(0,'rgba(0,255,255,0.15)');
+  floorGradient.addColorStop(0.5,'rgba(0,255,255,0.08)');
+  floorGradient.addColorStop(1,'rgba(0,255,255,0)');
+  ctx.fillStyle=floorGradient; ctx.fillRect(0,height-floorHeight,width,floorHeight);
   player.draw();
   particles.forEach(p=>p.draw());
   deathParticles.forEach(p=>{ctx.fillStyle=`rgba(0,150,255,${p.alpha})`;ctx.fillRect(p.x,p.y,p.size,p.size);});
-
-  // Side fade
   const g1=ctx.createLinearGradient(0,0,150,0); g1.addColorStop(0,'#000'); g1.addColorStop(1,'rgba(0,0,0,0)'); ctx.fillStyle=g1; ctx.fillRect(0,0,150,height);
   const g2=ctx.createLinearGradient(width-150,0,width,0); g2.addColorStop(0,'rgba(0,0,0,0)'); g2.addColorStop(1,'#000'); ctx.fillStyle=g2; ctx.fillRect(width-150,0,150,height);
 }
@@ -295,11 +217,7 @@ function resetGame(){
   obstacles=[]; walls=[]; fallingSpikes=[]; neonBlocks=[]; jumpPads=[]; particles=[]; deathParticles=[];
   obstacleTimer=0; padTimer=0; wallTimer=0; fallTimer=0; blockTimer=0;
   score=0; speed=9; gameOver=false;
-
-  // Spawn initial obstacles so player can jump immediately
-  spawnNeonBlock();
-  spawnPad();
-  spawnObstacle();
+  spawnNeonBlock(); spawnPad(); spawnObstacle();
 }
 
 window.addEventListener('resize',()=>{width=canvas.width=window.innerWidth;height=canvas.height=window.innerHeight;});
