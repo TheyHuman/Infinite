@@ -147,6 +147,8 @@ let obstacleTimer=0, padTimer=0, wallTimer=0, fallTimer=0, blockTimer=0;
 let obstacleInterval=60, padInterval=250, wallInterval=400, fallInterval=300, blockInterval=300;
 let slowTimer=0, slowActive=false, normalSpeed=speed;
 let slowRipple = null;
+let slowVignettePulse = 0;
+
 
 // --- Spawn Functions ---
 function spawnObstacle(){obstacles.push(new SpikeCluster(width+randomRange(50,100)));}
@@ -182,7 +184,13 @@ slowPixels = slowPixels.filter(p=>p.alpha > 0);
 
 
   // --- Slow pad ---
-  if(slowActive){slowTimer--; if(slowTimer<=0){speed=normalSpeed; slowActive=false;}}
+if(slowActive){
+  slowTimer--;
+  if(slowTimer<=0){
+    speed=normalSpeed;
+    slowActive=false;
+  }
+}
 
 if(slowRipple){
   slowRipple.r1 += 8;
@@ -195,6 +203,14 @@ if(slowRipple){
     slowRipple = null;
   }
 }
+
+// --- Slow-time vignette pulse logic ---
+if (slowActive) {
+  slowVignettePulse += 0.05;
+} else {
+  slowVignettePulse *= 0.9;
+}
+
 
  jumpPads.forEach(p=>{
   if(p.cooldown===0 && checkCollision(player,p)){
@@ -291,6 +307,22 @@ if(slowRipple){
 
   ctx.shadowBlur = 0;
 }
+// --- Slow-time Vignette Effect ---
+if (slowVignettePulse > 0.01) {
+  const intensity = 0.25 + Math.sin(slowVignettePulse) * 0.15;
+
+  const vignette = ctx.createRadialGradient(
+    width / 2, height / 2, width * 0.3,
+    width / 2, height / 2, width * 0.7
+  );
+
+  vignette.addColorStop(0, 'rgba(0,0,0,0)');
+  vignette.addColorStop(1, `rgba(0,40,120,${intensity})`);
+
+  ctx.fillStyle = vignette;
+  ctx.fillRect(0, 0, width, height);
+}
+
 }
 
 // --- Loop ---
